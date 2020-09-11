@@ -4,11 +4,10 @@ import config
 import os
 import sqlite3
 
-class DBConnection(object):
 
+class DBConnection(object):
     global cursor
     global conn
-
 
     def __init__(self):
         if not os.path.exists(config.database_path):
@@ -33,7 +32,6 @@ CREATE TABLE IF NOT EXISTS server_map(
             return None
         return buffer[0]
 
-
     def get_telegram_id(self, discord_channel: str) -> Optional[str]:
         result = self.cursor.execute(
             'SELECT telegram_id FROM server_map WHERE discord_channel=\'{0}\''.format(discord_channel))
@@ -42,23 +40,23 @@ CREATE TABLE IF NOT EXISTS server_map(
             return None
         return buffer[0]
 
-
     def save_connection(self, telegram_id: str, discord_channel: str):
         self.cursor.execute(
             'INSERT INTO server_map(id, discord_channel, telegram_id) VALUES(NULL, \'{0}\', \'{1}\')'.format(
                 discord_channel, telegram_id))
         self.conn.commit()
 
-
-    def delete_connecion_tg(self, telegram_id: str):
+    def delete_connection_tg(self, telegram_id: str):
         self.cursor.execute('DELETE FROM server_map WHERE telegram_id=\'{0}\''.format(telegram_id))
         self.conn.commit()
 
-
-    def delete_connecion_ds(self, discord_channel: str):
+    def delete_connection_ds(self, discord_channel: str):
         self.cursor.execute('DELETE FROM server_map WHERE discord_channel=\'{0}\''.format(discord_channel))
         self.conn.commit()
 
+    def get_all_connections(self):
+        result = self.cursor.execute('SELECT * FROM server_map')
+        return result.fetchall()
 
     def close(self):
         self.conn.close()

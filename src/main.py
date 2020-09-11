@@ -20,7 +20,7 @@ key_time_map = dict()
 def generate_key(telegram_id: str) -> Optional[str]:
     __db__ = db.DBConnection()
     if __db__.get_telegram_id(telegram_id) is None:
-        if key_map.values().__contains__(telegram_id):
+        if telegram_id in key_map.values():
             for key, val in key_map.items():
                 if val == telegram_id:
                     key_map.pop(key)
@@ -78,7 +78,7 @@ class TelegramIntegration(Thread):
 
     def __init__(self, tbot: telebot.TeleBot):
         super().__init__()
-        print('Intializing telegram bot...', end='\t\t\t')
+        print('Initializing telegram bot...', end='\t\t')
         self.tbot = tbot
 
         @tbot.message_handler(commands=['start', 'help'])
@@ -125,6 +125,8 @@ By {0}
         self.__db__ = db.DBConnection()
         try:
             self.tbot.polling()
+        except SystemExit:
+            pass
         finally:
             print('Telegram bot stopped')
             self.__db__.close()
@@ -153,15 +155,17 @@ By {0}
 
 
 class DiscordIntegration(Thread):
-    bot = commands.Bot(command_prefix='!')
+    bot: commands.Bot
     token: str
     __db__: db.DBConnection
     msgs_to_send = list()
+    to_close = False
 
     def __init__(self, token: str):
         super().__init__()
-        print('Intializing discord bot...', end='\t\t\t')
+        print('Initializing discord bot...', end='\t\t\t')
         self.token = token
+        self.bot = commands.Bot(command_prefix='!')
 
         @self.bot.event
         async def on_message(message: discord.Message):
@@ -185,6 +189,12 @@ class DiscordIntegration(Thread):
                             response = 'Invalid code'
                         await self.bot.get_channel(message.channel.id).send(response)
 
+
+        @self.bot.event
+        async def on_ready():
+            self.send_message.start()
+            self.check_to_close.start()
+
         print(bcolors.OKGREEN + 'DONE' + bcolors.ENDC)
 
     @tasks.loop(seconds=0.1)
@@ -192,6 +202,11 @@ class DiscordIntegration(Thread):
         for data in self.msgs_to_send:
             await self.bot.get_channel(int(data['to'])).send('', embed=data['content'])
             self.msgs_to_send.remove(data)
+
+    @tasks.loop(seconds=0.1)
+    async def check_to_close(self):
+        if self.to_close:
+            await self.bot.close()
 
     def call_message(self, message: str, author: str, channel: str):
         content = discord.Embed(title='By {0}'.format(author), description=message)
@@ -212,23 +227,20 @@ class DiscordIntegration(Thread):
 
     def raise_exception(self):
 
-        self.bot.loop.stop()
+        self.to_close = True
 
-        thread_id = self.get_id()
-        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
-                                                         ctypes.py_object(SystemExit))
-        if res > 1:
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
-            print('Exception raise failure')
+        # thread_id = self.get_id()
+        # res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
+        #                                                  ctypes.py_object(SystemExit))
+        # if res > 1:
+        #     ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
+        #     print('Exception raise failure')
 
     def run(self) -> None:
         self.__db__ = db.DBConnection()
-        try:
-            self.send_message.start()
-            self.bot.run(self.token)
-        finally:
-            print('Discord bot stopped')
-            self.__db__.close()
+        self.bot.run(self.token)
+        print('Discord bot stopped')
+        self.__db__.close()
 
     def launch(self):
         print('Starting discord bot...', end='\t\t\t\t')
@@ -268,18 +280,12 @@ if __name__ == '__main__':
         label = buffer[0]
         args = buffer[1:]
         if label == 'status':
-            print('Telegram: ' + ('Active' if telegram_interface.is_alive() else 'Inactive'))
-            print('Discord:  ' + ('Active' if discord_interface.is_alive() else 'Inactive'))
-        elif label == 'reload':
-            print('Reloading connection...')
-            stop()
-            while discord_interface.is_alive():
-                pass
-            while telegram_interface.is_alive():
-                pass
-            telegram_interface = TelegramIntegration(telebot.TeleBot(config.telegram_api_key))
-            discord_interface = DiscordIntegration(config.discord_api_key)
-            launch()
+            print('Telegram: \t\t\t\t\t\t\t' + (bcolors.OKGREEN + 'Active' + bcolors.ENDC
+                                                if telegram_interface.is_alive()
+                                                else bcolors.FAIL + 'Inactive' + bcolors.ENDC))
+            print('Discord:  \t\t\t\t\t\t\t' + (bcolors.OKGREEN + 'Active' + bcolors.ENDC
+                                                if discord_interface.is_alive()
+                                                else bcolors.FAIL + 'Inactive' + bcolors.ENDC))
         elif label == 'stop':
             print('Stopping server...')
             stop()
@@ -291,3 +297,9 @@ if __name__ == '__main__':
             for key in key_map:
                 print(key + ' | ' + str(key_map[key]) + '  | ' + str(key_time_map[key]))
             print('==========================')
+        elif label == 'connections':
+            print('Shape: [Telegram ID <===> Discord ID]')
+            __db__ = db.DBConnection()
+            for connection in __db__.get_all_connections():
+                print(f'[{connection[0]}] {connection[2]} <===> {connection[1]}')
+            __db__.close()
