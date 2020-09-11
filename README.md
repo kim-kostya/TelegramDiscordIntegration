@@ -26,6 +26,8 @@ Discord: https://discord.com/oauth2/authorize?client_id=742766156741345312&permi
 ## Commands (Server console)
 ```status``` - print bots' connections status\
 ```connections``` - print lost of telegram-discord connections\
+```remove <id>``` - remove telegram-discord connection \
+```stop``` - stop server
 
 ## Build from sources
 Install python3 (https://www.python.org/downloads/)
