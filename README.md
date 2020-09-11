@@ -2,7 +2,7 @@
 This bot can easy merge text chat in your discord server with your telegram group
 
 ## Bots
-Telegram: https://web.telegram.org/#/im?p=@tdintegration_bot \
+Telegram: https://t.me/tdintegration_bot \
 Discord: https://discord.com/oauth2/authorize?client_id=742766156741345312&permissions=59392&scope=bot
 
 ## How to connect
