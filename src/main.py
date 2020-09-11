@@ -91,6 +91,7 @@ Write /connect to generate bind code
 After this write tdi!connect [code] in discord
 
 Link for discord bot: https://discord.com/api/oauth2/authorize?client_id=742766156741345312&permissions=59392&scope=bot
+Created by kim-kostya(https://github.com/kim-kostya)
             ''')
 
         super()
@@ -192,21 +193,23 @@ class DiscordIntegration(Thread):
                             response = 'Invalid code'
                         await self.bot.get_channel(message.channel.id).send(response)
                     elif message.content.startswith('tdi!help'):
-                        message.channel.send('', embed='''
-Instructions:
-
-Add telegram bot by this link [https://t.me/tdintegration_bot] to your telegram group. After this action write "/connect" (It returns connection code, NOTE IT!). At the final write "tdi!connect <code>"
-
-P.S. For all actions you need to be admin
-                        ''')
+                        await self.bot.get_channel(message.channel.id)\
+                            .send('', embed=
+                        discord.Embed(title='Instructions',
+                                      description='Add telegram bot by this link [https://t.me/tdintegration_bot] to '
+                                                  'your telegram group. After this action write "/connect" (It '
+                                                  'returns connection code, NOTE IT!). At the final write '
+                                                  '"tdi!connect <code>"\n\nP.S. For all actions you need to be '
+                                                  'admin\nCreated by kim-kostya(https://github.com/kim-kostya)'))
                     elif message.content.startswith('tdi!disconnect'):
                         from_user: discord.Member = message.author
                         guild: discord.guild.Guild = message.guild
-                        admin_role = discord.utils.find(lambda r: r.name.lower == 'admin', guild.roles)
+                        admin_role = discord.utils.find(lambda r: r.name.lower() == 'admin', guild.roles)
                         if admin_role in from_user.roles:
                             self.__db__.delete_connection_ds(message.channel.id)
+                            await message.channel.send(from_user.mention, embed=discord.Embed(description='Disconnected'))
                         else:
-                            message.channel.senf(from_user.mention, embed='You don\'t have permission')
+                            await message.channel.send(from_user.mention, embed=discord.Embed(description='You don\'t have permission'))
 
 
         @self.bot.event
