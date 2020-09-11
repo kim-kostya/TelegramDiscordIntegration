@@ -58,5 +58,9 @@ CREATE TABLE IF NOT EXISTS server_map(
         result = self.cursor.execute('SELECT * FROM server_map')
         return result.fetchall()
 
+    def delete_connection_by_id(self, _id: int):
+        self.cursor.execute(f'DELETE FROM server_map WHERE id={_id}')
+        self.conn.commit()
+
     def close(self):
         self.conn.close()

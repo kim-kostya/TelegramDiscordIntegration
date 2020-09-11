@@ -17,6 +17,9 @@ key_map = dict()
 key_time_map = dict()
 
 
+__db__ = db.DBConnection()
+
+
 def generate_key(telegram_id: str) -> Optional[str]:
     __db__ = db.DBConnection()
     if __db__.get_telegram_id(telegram_id) is None:
@@ -84,15 +87,15 @@ class TelegramIntegration(Thread):
         @tbot.message_handler(commands=['start', 'help'])
         def help(message):
             self.tbot.send_message(message.chat.id, '''
-Write /connect_discord to generate bind code
-After this write !connect_telegram [code] in discord
+Write /connect to generate bind code
+After this write tdi!connect [code] in discord
 
 Link for discord bot: https://discord.com/api/oauth2/authorize?client_id=742766156741345312&permissions=59392&scope=bot
             ''')
 
         super()
 
-        @tbot.message_handler(commands=['connect_discord'])
+        @tbot.message_handler(commands=['connect'])
         def on_command(message: telebot.types.Message):
             if self.tbot.get_chat_member(message.chat.id,
                                          message.from_user.id).status == 'administrator' or self.tbot.get_chat_member(
@@ -171,11 +174,11 @@ class DiscordIntegration(Thread):
         async def on_message(message: discord.Message):
             if not message.author.bot:
                 if isinstance(message.content, str):
-                    if not (message.content.startswith('!') or message.content.startswith('p!')):
+                    if not (message.content.startswith('!') or message.content.startswith('p!') or message.content.startswith('tdi!')):
                         telegram_id = self.__db__.get_telegram_id(message.channel.id)
                         if telegram_id != None:
                             telegram_interface.send_message(message.content, message.author, telegram_id)
-                    elif message.content.startswith('!connect_telegram'):
+                    elif message.content.startswith('tdi!connect'):
 
                         code = message.content.split(' ')[1]
                         if key_map[code] != None:
@@ -188,6 +191,22 @@ class DiscordIntegration(Thread):
                         else:
                             response = 'Invalid code'
                         await self.bot.get_channel(message.channel.id).send(response)
+                    elif message.content.startswith('tdi!help'):
+                        message.channel.send('', embed='''
+Instructions:
+
+Add telegram bot by this link [https://t.me/tdintegration_bot] to your telegram group. After this action write "/connect" (It returns connection code, NOTE IT!). At the final write "tdi!connect <code>"
+
+P.S. For all actions you need to be admin
+                        ''')
+                    elif message.content.startswith('tdi!disconnect'):
+                        from_user: discord.Member = message.author
+                        guild: discord.guild.Guild = message.guild
+                        admin_role = discord.utils.find(lambda r: r.name.lower == 'admin', guild.roles)
+                        if admin_role in from_user.roles:
+                            self.__db__.delete_connection_ds(message.channel.id)
+                        else:
+                            message.channel.senf(from_user.mention, embed='You don\'t have permission')
 
 
         @self.bot.event
@@ -299,7 +318,14 @@ if __name__ == '__main__':
             print('==========================')
         elif label == 'connections':
             print('Shape: [Telegram ID <===> Discord ID]')
-            __db__ = db.DBConnection()
             for connection in __db__.get_all_connections():
                 print(f'[{connection[0]}] {connection[2]} <===> {connection[1]}')
-            __db__.close()
+        elif label == 'remove':
+            try:
+                _id = int(args[0])
+                __db__.delete_connection_by_id(_id)
+                print('REMOVED')
+            except ValueError:
+                print(bcolors.FAIL + 'ID must be integer' + bcolors.ENDC)
+            except IndexError:
+                print(bcolors.FAIL + 'Usage: remove [id]' + bcolors.ENDC)
