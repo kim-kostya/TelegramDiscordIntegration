@@ -1,6 +1,6 @@
 build
 dist
 
-src/__pycahce__
+src/__pycahce__/
 
 *.sqlite
