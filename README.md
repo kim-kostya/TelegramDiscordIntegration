@@ -34,11 +34,9 @@ Install python3 (https://www.python.org/downloads/)
 
 Modules:\
 discordpy (```pip install -U discord.py```) \
-PyTelegramBotApi (```pip install pyTelegramBotAPI```) \
-\
-Download pyinstaller (```pip install pyinstaller```)
+PyTelegramBotApi (```pip install pyTelegramBotAPI```) 
 
 ### On Windows
+Download pyinstaller (```pip install pyinstaller```)
+
 run ```build.cmd```
-### On Linux
-run ```build.sh```
