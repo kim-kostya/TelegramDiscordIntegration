@@ -1,21 +1,24 @@
+import ctypes
+import random
+import string
 import sys
 import threading
+import os
+import requests
+from threading import Thread
 from typing import Optional
 
+import discord
+import telebot
 from discord.ext import commands
 from discord.ext import tasks
 
-import db, time, config
-import discord
-import random
-import string
-import telebot
-from threading import Thread
-import ctypes
+import config
+import db
+import time
 
 key_map = dict()
 key_time_map = dict()
-
 
 __db__ = db.DBConnection()
 
@@ -45,6 +48,11 @@ def generate_str() -> str:
     return result_str
 
 
+def try_create_dir(path):
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+
 class KeyChecker(Thread):
     tostop = False
 
@@ -64,7 +72,7 @@ class KeyChecker(Thread):
         self.tostop = True
 
 
-class bcolors:
+class ConsoleColors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKGREEN = '\033[92m'
@@ -85,7 +93,7 @@ class TelegramIntegration(Thread):
         self.tbot = tbot
 
         @tbot.message_handler(commands=['start', 'help'])
-        def help(message):
+        def on_help_command(message):
             self.tbot.send_message(message.chat.id, '''
 Write /connect to generate bind code
 After this write tdi!connect [code] in discord
@@ -94,16 +102,16 @@ Link for discord bot: https://discord.com/api/oauth2/authorize?client_id=7427661
 Created by kim-kostya(https://github.com/kim-kostya)
             ''')
 
-        super()
-
         @tbot.message_handler(commands=['connect'])
-        def on_command(message: telebot.types.Message):
-            if self.tbot.get_chat_member(message.chat.id,
-                                         message.from_user.id).status == 'administrator' or self.tbot.get_chat_member(
-                    message.chat.id, message.from_user.id).status == 'creator':
+        def on_connect_command(message: telebot.types.Message):
+            if self.tbot.get_chat_member(message.chat.id, message.from_user.id).status == 'administrator' \
+                    or self.tbot.get_chat_member(message.chat.id, message.from_user.id).status == 'creator':
+
                 code = generate_key(message.chat.id)
-                if code != None:
-                    self.tbot.send_message(message.chat.id, 'Your code: ' + code)
+
+                if code is not None:
+                    self.tbot.send_message(message.from_user.id, 'Your code: ' + code)
+                    self.tbot.send_message(message.chat.id, 'Code sent')
                 else:
                     self.tbot.send_message(message.chat.id, 'Already connected')
 
@@ -113,11 +121,59 @@ Created by kim-kostya(https://github.com/kim-kostya)
             if not message.from_user.is_bot:
                 if not message.text.startswith('/'):
                     channel = dbc.get_discord_channel(message.chat.id)
-                    if channel != None:
-                        discord_interface.call_message(message.text, message.from_user.username, channel)
+                    if channel is not None:
+                        discord_interface.call_send_text(message.text, message.from_user.username, channel)
                 pass
 
-        print(bcolors.OKGREEN + 'DONE' + bcolors.ENDC)
+        @tbot.message_handler(content_types=['photo', 'document', 'audio'])
+        def on_media(message: telebot.types.Message):
+            dbc = db.DBConnection()
+            if not message.from_user.is_bot:
+                if message.photo is None:
+                    received_images = None
+                else:
+                    received_images = message.photo[1::2]
+
+                channel = dbc.get_discord_channel(message.chat.id)
+
+                if message.text is None:
+                    message.text = ''
+
+                try_create_dir(f"{config.temp_dir}/photos")
+                try_create_dir(f"{config.temp_dir}/videos")
+                try_create_dir(f"{config.temp_dir}/documents")
+
+                self.__send_media_list__(received_images, message.from_user.username, channel, msg=message.text)
+                self.__send_media__(message.document, message.from_user.username, channel, msg=message.text)
+                self.__send_media__(message.audio, message.from_user.username, channel, msg=message.text)
+
+        print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
+
+    def __send_media_list__(self, media, username, channel, msg=''):
+        if media is None:
+            return
+        for file in media:
+            self.__send_media__(file, username, channel, msg)
+
+    def __send_media__(self, media, username, channel, msg=''):
+        if media is None:
+            return
+
+        if media.file_size > 2000000:
+            return
+
+        file_path = self.tbot.get_file(media.file_id).file_path
+
+        response = requests.get(f"https://api.telegram.org/file/bot{config.telegram_api_key}/{file_path}")
+        fp = open(f"{config.temp_dir}/{file_path}", "wb+")
+        fp.write(response.content)
+        fp.close()
+
+        if channel is not None:
+            discord_interface \
+                .call_send_file(msg, f"{config.temp_dir}/{file_path}",
+                                username, channel)
+
 
     def send_message(self, message, author, telegram_id):
         self.tbot.send_message(int(telegram_id), '''
@@ -138,16 +194,16 @@ By {0}
     def launch(self):
         print('Starting telegram bot...', end='\t\t\t')
         self.start()
-        print(bcolors.OKGREEN + 'DONE' + bcolors.ENDC)
+        print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
 
     def get_id(self):
 
         # returns id of the respective thread
         if hasattr(self, '_thread_id'):
             return self._thread_id
-        for id, thread in threading._active.items():
+        for thread_id, thread in threading._active.items():
             if thread is self:
-                return id
+                return thread_id
 
     def raise_exception(self):
         thread_id = self.get_id()
@@ -169,73 +225,96 @@ class DiscordIntegration(Thread):
         super().__init__()
         print('Initializing discord bot...', end='\t\t\t')
         self.token = token
-        self.bot = commands.Bot(command_prefix='!')
+        self.bot = commands.Bot(command_prefix='tdi!')
 
         @self.bot.event
         async def on_message(message: discord.Message):
             if not message.author.bot:
                 if isinstance(message.content, str):
-                    if not (message.content.startswith('!') or message.content.startswith('p!') or message.content.startswith('tdi!')):
+                    if not (message.content.startswith('!')
+                            or message.content.startswith('p!')
+                            or message.content.startswith('tdi!')):
                         telegram_id = self.__db__.get_telegram_id(message.channel.id)
-                        if telegram_id != None:
+                        if telegram_id is not None:
                             telegram_interface.send_message(message.content, message.author, telegram_id)
                     elif message.content.startswith('tdi!connect'):
-
-                        code = message.content.split(' ')[1]
-                        if key_map[code] != None:
-                            discord_channel = message.channel.id
-                            telegram_id = key_map[code]
-                            self.__db__.save_connection(telegram_id, discord_channel)
-                            key_map.pop(code)
-                            key_time_map.pop(code)
-                            response = 'Connected'
-                        else:
-                            response = 'Invalid code'
-                        await self.bot.get_channel(message.channel.id).send(response)
+                        self.call_connect(message)
                     elif message.content.startswith('tdi!help'):
-                        await self.bot.get_channel(message.channel.id)\
-                            .send('', embed=
-                        discord.Embed(title='Instructions',
-                                      description='Add telegram bot by this link [https://t.me/tdintegration_bot] to '
-                                                  'your telegram group. After this action write "/connect" (It '
-                                                  'returns connection code, NOTE IT!). At the final write '
-                                                  '"tdi!connect <code>"\n\nP.S. For all actions you need to be '
-                                                  'admin\nCreated by kim-kostya(https://github.com/kim-kostya)'))
+                        self.print_help(message)
                     elif message.content.startswith('tdi!disconnect'):
-                        from_user: discord.Member = message.author
-                        guild: discord.guild.Guild = message.guild
-                        admin_role = discord.utils.find(lambda r: r.name.lower() == 'admin', guild.roles)
-                        if admin_role in from_user.roles:
-                            self.__db__.delete_connection_ds(message.channel.id)
-                            await message.channel.send(from_user.mention, embed=discord.Embed(description='Disconnected'))
-                        else:
-                            await message.channel.send(from_user.mention, embed=discord.Embed(description='You don\'t have permission'))
-
+                        self.call_disconnect(message)
 
         @self.bot.event
         async def on_ready():
-            self.send_message.start()
+            self.send_messages.start()
             self.check_to_close.start()
 
-        print(bcolors.OKGREEN + 'DONE' + bcolors.ENDC)
+        print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
 
     @tasks.loop(seconds=0.1)
-    async def send_message(self):
-        for data in self.msgs_to_send:
-            await self.bot.get_channel(int(data['to'])).send('', embed=data['content'])
-            self.msgs_to_send.remove(data)
+    async def send_messages(self):
+        for msg in self.msgs_to_send:
+            file: discord.file.File
+            if 'file' in msg:
+                fp = open(msg['file'], "rb+")
+                file = discord.file.File(fp)
+            await self.bot.get_channel(int(msg['to'])).send('', embed=msg['content'], file=file)
+            self.msgs_to_send.remove(msg)
 
     @tasks.loop(seconds=0.1)
     async def check_to_close(self):
         if self.to_close:
             await self.bot.close()
 
-    def call_message(self, message: str, author: str, channel: str):
+    def print_help(self, message):
+        self.bot.get_channel(message.channel.id) \
+            .send('', embed=discord.Embed(title='Instructions',
+                                          description=
+                                          'Add telegram bot by this link [https://t.me/tdintegration_bot] to '
+                                          'your telegram group. After this action write "/connect" (It '
+                                          'send code to private messages, NOTE IT!). At the final write '
+                                          '"tdi!connect <code>"\n\nFor all actions you need to be '
+                                          'admin\nCreated by kim-kostya(https://github.com/kim-kostya)'))
+
+    def call_connect(self, message):
+        code = message.content.split(' ')[1]
+        if key_map[code] is not None:
+            discord_channel = message.channel.id
+            telegram_id = key_map[code]
+            self.__db__.save_connection(telegram_id, discord_channel)
+            key_map.pop(code)
+            key_time_map.pop(code)
+            response = 'Connected'
+        else:
+            response = 'Invalid code'
+        message.channel.send(message.author.mention, embed=discord.Embed(description=response))
+
+    def call_disconnect(self, message):
+        from_user: discord.Member = message.author
+        guild: discord.guild.Guild = message.guild
+        admin_role = discord.utils.find(lambda r: r.name.lower() == 'admin', guild.roles)
+        if admin_role in from_user.roles:
+            self.__db__.delete_connection_ds(message.channel.id)
+            message.channel.send(from_user.mention, embed=discord.Embed(description='Disconnected'))
+        else:
+            message.channel.send(from_user.mention, embed=discord.Embed(description='You don\'t have permission'))
+
+    def call_send_text(self, message: str, author: str, channel: str):
         content = discord.Embed(title='By {0}'.format(author), description=message)
         data = {
             'to': channel,
-            'content': content
+            'content': content,
         }
+        self.msgs_to_send.append(data)
+
+    def call_send_file(self, message: str, file: str, author: str, channel: str):
+        content = discord.Embed(title='By {0}'.format(author), description=message)
+        data = {
+            'to': channel,
+            'content': content,
+            'file': file
+        }
+
         self.msgs_to_send.append(data)
 
     def get_id(self):
@@ -243,9 +322,9 @@ class DiscordIntegration(Thread):
         # returns id of the respective thread
         if hasattr(self, '_thread_id'):
             return self._thread_id
-        for id, thread in threading._active.items():
+        for thread_id, thread in threading._active.items():
             if thread is self:
-                return id
+                return thread_id
 
     def raise_exception(self):
 
@@ -268,9 +347,9 @@ class DiscordIntegration(Thread):
         print('Starting discord bot...', end='\t\t\t\t')
         try:
             self.start()
-            print(bcolors.OKGREEN + 'DONE' + bcolors.ENDC)
+            print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
         except:
-            print(bcolors.FAIL + 'FAILED' + bcolors.ENDC)
+            print(ConsoleColors.FAIL + 'FAILED' + ConsoleColors.ENDC)
 
 
 telegram_interface: TelegramIntegration
@@ -287,29 +366,47 @@ def stop():
     discord_interface.raise_exception()
 
 
+def clear_dir(path):
+    for file in os.listdir(path):
+        os.remove(file)
+
+
+def clear_temp_dir():
+    for file in os.listdir(config.temp_dir):
+        os.remove(config.temp_dir+'/'+file)
+
+
 if __name__ == '__main__':
+    if not os.path.exists(config.temp_dir):
+        os.mkdir(config.temp_dir)
+
     telegram_interface = TelegramIntegration(telebot.TeleBot(config.telegram_api_key))
     discord_interface = DiscordIntegration(config.discord_api_key)
+
     print('Initializing other components...', end='\t')
     key_checker = KeyChecker()
     key_checker.start()
-    print(bcolors.OKGREEN + 'DONE' + bcolors.ENDC)
+    print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
+
     launch()
 
     while True:
-        cmd_raw = input('>')
+        cmd_raw = input()
+
         buffer = cmd_raw.split(' ')
         label = buffer[0]
         args = buffer[1:]
+
         if label == 'status':
-            print('Telegram: \t\t\t\t\t\t\t' + (bcolors.OKGREEN + 'Active' + bcolors.ENDC
+            print('Telegram: \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
                                                 if telegram_interface.is_alive()
-                                                else bcolors.FAIL + 'Inactive' + bcolors.ENDC))
-            print('Discord:  \t\t\t\t\t\t\t' + (bcolors.OKGREEN + 'Active' + bcolors.ENDC
+                                                else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
+            print('Discord:  \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
                                                 if discord_interface.is_alive()
-                                                else bcolors.FAIL + 'Inactive' + bcolors.ENDC))
+                                                else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
         elif label == 'stop':
             print('Stopping server...')
+            clear_temp_dir()
             stop()
             key_checker.stop()
             sys.exit(0)
@@ -329,6 +426,6 @@ if __name__ == '__main__':
                 __db__.delete_connection_by_id(_id)
                 print('REMOVED')
             except ValueError:
-                print(bcolors.FAIL + 'ID must be integer' + bcolors.ENDC)
+                print(ConsoleColors.FAIL + 'ID must be integer' + ConsoleColors.ENDC)
             except IndexError:
-                print(bcolors.FAIL + 'Usage: remove [id]' + bcolors.ENDC)
+                print(ConsoleColors.FAIL + 'Usage: remove [id]' + ConsoleColors.ENDC)
