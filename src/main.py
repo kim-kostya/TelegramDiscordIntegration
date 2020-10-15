@@ -139,9 +139,9 @@ Created by kim-kostya(https://github.com/kim-kostya)
                 if message.text is None:
                     message.text = ''
 
-                try_create_dir(f"{config.temp_dir}/photos")
-                try_create_dir(f"{config.temp_dir}/videos")
-                try_create_dir(f"{config.temp_dir}/documents")
+                try_create_dir(f"{config.temp_dir}/telegram/photos")
+                try_create_dir(f"{config.temp_dir}/telegram/videos")
+                try_create_dir(f"{config.temp_dir}/telegram/documents")
 
                 self.__send_media_list__(received_images, message.from_user.username, channel, msg=message.text)
                 self.__send_media__(message.document, message.from_user.username, channel, msg=message.text)
@@ -171,15 +171,17 @@ Created by kim-kostya(https://github.com/kim-kostya)
 
         if channel is not None:
             discord_interface \
-                .call_send_file(msg, f"{config.temp_dir}/{file_path}",
+                .call_send_file(msg, f"{config.temp_dir}/telegram/{file_path}",
                                 username, channel)
-
 
     def send_message(self, message, author, telegram_id):
         self.tbot.send_message(int(telegram_id), '''
 By {0}
 {1}
         '''.format(author, message))
+
+    def send_file(self, telegram_id, file, author):
+        self.tbot.send_document(int(telegram_id), open(file, 'rb').read())
 
     def run(self):
         self.__db__ = db.DBConnection()
@@ -236,13 +238,38 @@ class DiscordIntegration(Thread):
                             or message.content.startswith('tdi!')):
                         telegram_id = self.__db__.get_telegram_id(message.channel.id)
                         if telegram_id is not None:
+                            for file in message.attachments:
+                                self.__send_media__(telegram_id, file, message.author)
                             telegram_interface.send_message(message.content, message.author, telegram_id)
                     elif message.content.startswith('tdi!connect'):
-                        self.call_connect(message)
+                        code = message.content.split(' ')[1]
+                        if key_map[code] is not None:
+                            discord_channel = message.channel.id
+                            telegram_id = key_map[code]
+                            self.__db__.save_connection(telegram_id, discord_channel)
+                            key_map.pop(code)
+                            key_time_map.pop(code)
+                            response = 'Connected'
+                        else:
+                            response = 'Invalid code'
+                        await message.channel.send(message.author.mention, embed=discord.Embed(description=response))
                     elif message.content.startswith('tdi!help'):
-                        self.print_help(message)
+                        await self.bot.get_channel(message.channel.id).send('', embed=discord.Embed(title='Instructions',
+                                                                                                    description=
+                                                                                                    'Add telegram bot by this link [https://t.me/tdintegration_bot] to '
+                                                                                                    'your telegram group. After this action write "/connect" (It '
+                                                                                                    'send code to private messages, NOTE IT!). At the final write '
+                                                                                                    '"tdi!connect <code>"\n\nFor all actions you need to be '
+                                                                                                    'admin\nCreated by kim-kostya(https://github.com/kim-kostya)'))
                     elif message.content.startswith('tdi!disconnect'):
-                        self.call_disconnect(message)
+                        from_user: discord.Member = message.author
+                        guild: discord.guild.Guild = message.guild
+                        admin_role = discord.utils.find(lambda r: r.name.lower() == 'admin', guild.roles)
+                        if admin_role in from_user.roles:
+                            self.__db__.delete_connection_ds(message.channel.id)
+                            await message.channel.send(from_user.mention, embed=discord.Embed(description='Disconnected'))
+                        else:
+                            await message.channel.send(from_user.mention, embed=discord.Embed(description='You don\'t have permission'))
 
         @self.bot.event
         async def on_ready():
@@ -251,10 +278,21 @@ class DiscordIntegration(Thread):
 
         print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
 
+    @staticmethod
+    def __send_media__(to, file, author):
+        try_create_dir(f"{config.temp_dir}/discord/{file.id}")
+
+        response = requests.get(file.url)
+        fp = open(f"{config.temp_dir}/discord/{file.id}/{file.filename}", "wb+")
+        fp.write(response.content)
+        fp.close()
+
+        telegram_interface.send_file(to, f"{config.temp_dir}/discord/{file.id}/{file.filename}", author)
+
     @tasks.loop(seconds=0.1)
     async def send_messages(self):
         for msg in self.msgs_to_send:
-            file: discord.file.File
+            file: discord.file.File = None
             if 'file' in msg:
                 fp = open(msg['file'], "rb+")
                 file = discord.file.File(fp)
@@ -265,39 +303,6 @@ class DiscordIntegration(Thread):
     async def check_to_close(self):
         if self.to_close:
             await self.bot.close()
-
-    def print_help(self, message):
-        self.bot.get_channel(message.channel.id) \
-            .send('', embed=discord.Embed(title='Instructions',
-                                          description=
-                                          'Add telegram bot by this link [https://t.me/tdintegration_bot] to '
-                                          'your telegram group. After this action write "/connect" (It '
-                                          'send code to private messages, NOTE IT!). At the final write '
-                                          '"tdi!connect <code>"\n\nFor all actions you need to be '
-                                          'admin\nCreated by kim-kostya(https://github.com/kim-kostya)'))
-
-    def call_connect(self, message):
-        code = message.content.split(' ')[1]
-        if key_map[code] is not None:
-            discord_channel = message.channel.id
-            telegram_id = key_map[code]
-            self.__db__.save_connection(telegram_id, discord_channel)
-            key_map.pop(code)
-            key_time_map.pop(code)
-            response = 'Connected'
-        else:
-            response = 'Invalid code'
-        message.channel.send(message.author.mention, embed=discord.Embed(description=response))
-
-    def call_disconnect(self, message):
-        from_user: discord.Member = message.author
-        guild: discord.guild.Guild = message.guild
-        admin_role = discord.utils.find(lambda r: r.name.lower() == 'admin', guild.roles)
-        if admin_role in from_user.roles:
-            self.__db__.delete_connection_ds(message.channel.id)
-            message.channel.send(from_user.mention, embed=discord.Embed(description='Disconnected'))
-        else:
-            message.channel.send(from_user.mention, embed=discord.Embed(description='You don\'t have permission'))
 
     def call_send_text(self, message: str, author: str, channel: str):
         content = discord.Embed(title='By {0}'.format(author), description=message)
@@ -377,8 +382,9 @@ def clear_temp_dir():
 
 
 if __name__ == '__main__':
-    if not os.path.exists(config.temp_dir):
-        os.mkdir(config.temp_dir)
+    try_create_dir(config.temp_dir)
+    try_create_dir(f'{config.temp_dir}/telegram')
+    try_create_dir(f'{config.temp_dir}/discord')
 
     telegram_interface = TelegramIntegration(telebot.TeleBot(config.telegram_api_key))
     discord_interface = DiscordIntegration(config.discord_api_key)
