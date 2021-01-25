@@ -40,3 +40,7 @@ PyTelegramBotApi (```pip install pyTelegramBotAPI```)
 Download pyinstaller (```pip install pyinstaller```)
 
 run ```build.cmd```
+
+## Environment variables
+TDI_TELEGRAM_API_KEY  = <Telegram bot token>
+TDI_DISCORD_API_KEY   = <Discord api token>
