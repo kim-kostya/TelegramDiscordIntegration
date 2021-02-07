@@ -346,7 +346,6 @@ class DiscordIntegration(Thread):
         self.__db__ = db.DBConnection()
         self.bot.run(self.token)
         print('Discord bot stopped')
-        self.__db__.close()
 
     def launch(self):
         print('Starting discord bot...', end='\t\t\t\t')
@@ -396,42 +395,43 @@ if __name__ == '__main__':
 
     launch()
 
-    while True:
-        cmd_raw = input()
+    if sys.argv.__contains__('--cli'):
+        while True:
+            cmd_raw = input()
 
-        buffer = cmd_raw.split(' ')
-        label = buffer[0]
-        args = buffer[1:]
+            buffer = cmd_raw.split(' ')
+            label = buffer[0]
+            args = buffer[1:]
 
-        if label == 'status':
-            print('Telegram: \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
-                                                if telegram_interface.is_alive()
-                                                else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
-            print('Discord:  \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
-                                                if discord_interface.is_alive()
-                                                else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
-        elif label == 'stop':
-            print('Stopping server...')
-            clear_temp_dir()
-            stop()
-            key_checker.stop()
-            sys.exit(0)
-        elif label == 'keymap':
-            print('KEY   | Telegram ID | Time')
-            print('==========================')
-            for key in key_map:
-                print(key + ' | ' + str(key_map[key]) + '  | ' + str(key_time_map[key]))
-            print('==========================')
-        elif label == 'connections':
-            print('Shape: [Telegram ID <===> Discord ID]')
-            for connection in __db__.get_all_connections():
-                print(f'[{connection[0]}] {connection[2]} <===> {connection[1]}')
-        elif label == 'remove':
-            try:
-                _id = int(args[0])
-                __db__.delete_connection_by_id(_id)
-                print('REMOVED')
-            except ValueError:
-                print(ConsoleColors.FAIL + 'ID must be integer' + ConsoleColors.ENDC)
-            except IndexError:
-                print(ConsoleColors.FAIL + 'Usage: remove [id]' + ConsoleColors.ENDC)
+            if label == 'status':
+                print('Telegram: \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
+                                                    if telegram_interface.is_alive()
+                                                    else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
+                print('Discord:  \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
+                                                    if discord_interface.is_alive()
+                                                    else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
+            elif label == 'stop':
+                print('Stopping server...')
+                clear_temp_dir()
+                stop()
+                key_checker.stop()
+                sys.exit(0)
+            elif label == 'keymap':
+                print('KEY   | Telegram ID | Time')
+                print('==========================')
+                for key in key_map:
+                    print(key + ' | ' + str(key_map[key]) + '  | ' + str(key_time_map[key]))
+                print('==========================')
+            elif label == 'connections':
+                print('Shape: [Telegram ID <===> Discord ID]')
+                for connection in __db__.get_all_connections():
+                    print(f'[{connection[0]}] {connection[2]} <===> {connection[1]}')
+            elif label == 'remove':
+                try:
+                    _id = int(args[0])
+                    __db__.delete_connection_by_id(_id)
+                    print('REMOVED')
+                except ValueError:
+                    print(ConsoleColors.FAIL + 'ID must be integer' + ConsoleColors.ENDC)
+                except IndexError:
+                    print(ConsoleColors.FAIL + 'Usage: remove [id]' + ConsoleColors.ENDC)

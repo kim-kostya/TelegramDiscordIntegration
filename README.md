@@ -29,18 +29,30 @@ Discord: https://discord.com/oauth2/authorize?client_id=742766156741345312&permi
 ```remove <id>``` - remove telegram-discord connection \
 ```stop``` - stop server
 
-## Build from sources
+## Installing
 Install python3 (https://www.python.org/downloads/)
 
 Modules:\
 discordpy (```pip install -U discord.py```) \
-PyTelegramBotApi (```pip install pyTelegramBotAPI```) 
+PyTelegramBotApi (```pip install -U pyTelegramBotAPI```) \
+psycopg2 (```pip install -U psycopg2```)
 
-### On Windows
+### Windows
 Download pyinstaller (```pip install pyinstaller```)
 
-run ```build.cmd```
+```build.cmd```
+
+### Linux
+```chmod +x ./install.sh``` \
+```sudo ./install.sh```
+
 
 ## Environment variables
-TDI_TELEGRAM_API_KEY  = <Telegram bot token>
-TDI_DISCORD_API_KEY   = <Discord api token>
+### API KEYS
+TDI_TELEGRAM_API_KEY  = [Telegram bot token]\
+TDI_DISCORD_API_KEY   = [Discord api token]
+### Database (PostgresSQL)
+TDI_DATABASE_HOST     = [Database server url]\
+TDI_DATABASE_NAME     = [Database name]\
+TDI_DATABASE_USERNAME = [Database username]\
+TDI_DATABASE_PASSWORD = [Database password]

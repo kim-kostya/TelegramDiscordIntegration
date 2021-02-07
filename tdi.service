@@ -1,0 +1,6 @@
+[Unit]
+Description=TDI Bot
+After=multi-user.target[Service]
+Type=idle
+ExecStart=/usr/bin/python /lib/tdi/main .py[Install]
+WantedBy=multi-user.target

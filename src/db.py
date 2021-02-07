@@ -2,7 +2,7 @@ from typing import Optional
 
 import config
 import os
-import sqlite3
+import psycopg2
 
 
 class DBConnection(object):
@@ -10,10 +10,10 @@ class DBConnection(object):
     global conn
 
     def __init__(self):
-        if not os.path.exists(config.database_path):
-            open(config.database_path, 'a').close()
-
-        self.conn = sqlite3.connect(config.database_path)
+        self.conn = psycopg2.connect(host=config.database_path,
+                                     database=config.database_name,
+                                     user=config.database_username,
+                                     password=config.database_password)
         self.cursor = self.conn.cursor()
         self.cursor.execute('''
 CREATE TABLE IF NOT EXISTS server_map(
