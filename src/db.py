@@ -1,19 +1,22 @@
 from typing import Optional
 
 import config
-import os
-import psycopg2
 
 
-class DBConnection(object):
+class DBConnection:
     global cursor
     global conn
 
     def __init__(self):
-        self.conn = psycopg2.connect(host=config.database_path,
-                                     database=config.database_name,
-                                     user=config.database_username,
-                                     password=config.database_password)
+        if config.database_driver == 'sqlite':
+            import sqlite3 as driver
+            self.conn = driver.connect(config.database_path)
+        elif config.database_driver == 'postgres':
+            import psycopg2 as driver
+            self.conn = driver.connect(host=config.database_path,
+                                       database=config.database_name,
+                                       username=config.database_username,
+                                       password=config.database_password)
         self.cursor = self.conn.cursor()
         self.cursor.execute('''
 CREATE TABLE IF NOT EXISTS server_map(
