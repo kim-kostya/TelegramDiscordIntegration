@@ -44,6 +44,7 @@ Download pyinstaller (```pip install pyinstaller```)
 ```build.cmd```
 
 ### Linux
+Install python3-venv\
 ```chmod +x ./install.sh``` \
 ```sudo ./install.sh```
 

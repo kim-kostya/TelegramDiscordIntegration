@@ -415,7 +415,7 @@ if __name__ == '__main__':
                                                     if telegram_interface.is_alive()
                                                     else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
                 print('Discord:  \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
-                                                    if discord_interface.is_ready()
+                                                    if discord_interface.is_alive()
                                                     else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
             elif label == 'stop':
                 print('Stopping server...')
