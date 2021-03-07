@@ -33,9 +33,10 @@ Discord: https://discord.com/oauth2/authorize?client_id=742766156741345312&permi
 Install python3 (https://www.python.org/downloads/)
 
 Modules:\
-discordpy (```pip install -U discord.py```) \
+discord.py (```pip install -U discord.py```) \
+requests (```pip install -U requests```) \
 PyTelegramBotApi (```pip install -U pyTelegramBotAPI```) \
-psycopg2 (```pip install -U psycopg2```)
+psycopg2 (```pip install -U psycopg2```) Optional
 
 ### Windows
 Download pyinstaller (```pip install pyinstaller```)

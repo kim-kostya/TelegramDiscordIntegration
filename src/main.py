@@ -7,6 +7,8 @@ import os
 import requests
 from threading import Thread
 from typing import Optional
+import datetime
+import asyncio
 
 import discord
 import telebot
@@ -21,6 +23,21 @@ key_map = dict()
 key_time_map = dict()
 
 __db__ = db.DBConnection()
+
+
+class Logger:
+    use_cli = False
+    log_file = None
+
+    def __init__(self):
+        try_create_dir("./logs")
+        self.log_file = open(f"./logs/log-{datetime.datetime.now()}.txt", "w+")
+
+    def log(self, message):
+        final_message = f"[{datetime.datetime.now()}]{message}"
+        self.log_file.write(final_message)
+        if self.use_cli:
+            print(final_message)
 
 
 def generate_key(telegram_id: str) -> Optional[str]:
@@ -322,6 +339,9 @@ class DiscordIntegration(Thread):
             if thread is self:
                 return thread_id
 
+    def run(self) -> None:
+        asyncio.run(self.bot.start(self.token))
+
     def raise_exception(self):
 
         self.to_close = True
@@ -333,14 +353,10 @@ class DiscordIntegration(Thread):
         #     ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
         #     print('Exception raise failure')
 
-    def run(self) -> None:
-        self.__db__ = db.DBConnection()
-        self.bot.run(self.token)
-        print('Discord bot stopped')
-
     def launch(self):
         print('Starting discord bot...', end='\t\t\t\t')
         try:
+            self.__db__ = db.DBConnection()
             self.start()
             print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
         except:
@@ -386,7 +402,7 @@ if __name__ == '__main__':
 
     launch()
 
-    if sys.argv.__contains__('--cli'):
+    if '--cli' in sys.argv:
         while True:
             cmd_raw = input()
 
@@ -399,7 +415,7 @@ if __name__ == '__main__':
                                                     if telegram_interface.is_alive()
                                                     else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
                 print('Discord:  \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
-                                                    if discord_interface.is_alive()
+                                                    if discord_interface.is_ready()
                                                     else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
             elif label == 'stop':
                 print('Stopping server...')

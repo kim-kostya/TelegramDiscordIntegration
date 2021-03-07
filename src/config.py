@@ -1,7 +1,7 @@
 import os
 
 database_driver = 'sqlite'
-database_path = os.getenv('TDI_DATABASE_HOST')
+database_path = os.getenv('TDI_DATABASE_HOST', './database.sqlite')
 database_name = os.getenv('TDI_DATABASE_NAME')
 database_username = os.getenv('TDI_DATABASE_USERNAME')
 database_password = os.getenv('TDI_DATABASE_PASSWORD')

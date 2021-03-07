@@ -1,6 +1,13 @@
 [Unit]
 Description=TDI Bot
-After=multi-user.target[Service]
-Type=idle
-ExecStart=/usr/bin/python /lib/tdi/main .py[Install]
+After=network.target
+
+[Service]
+Type=simple
+User=tdi
+ExecStart=/lib/tdi/start.sh
+WorkingDirectory=/etc/tdi/
+Restart=on-failure
+
+[Install]
 WantedBy=multi-user.target
