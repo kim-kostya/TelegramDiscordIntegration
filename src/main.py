@@ -8,6 +8,7 @@ import requests
 from threading import Thread
 from typing import Optional
 import datetime
+import tracemalloc
 import asyncio
 
 import discord
@@ -266,7 +267,8 @@ class DiscordIntegration(Thread):
                     elif message.content.startswith('tdi!help'):
                         await self.bot\
                             .get_channel(message.channel.id)\
-                            .send('', embed=discord.Embed(title='Instructions', description=config.discord_help_message))
+                            .send('',
+                                  embed=discord.Embed(title='Instructions', description=config.discord_help_message))
                     elif message.content.startswith('tdi!disconnect'):
                         from_user: discord.Member = message.author
                         guild: discord.guild.Guild = message.guild
@@ -283,6 +285,7 @@ class DiscordIntegration(Thread):
         async def on_ready():
             self.send_messages.start()
             self.check_to_close.start()
+            print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
 
         print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
 
@@ -340,7 +343,8 @@ class DiscordIntegration(Thread):
                 return thread_id
 
     def run(self) -> None:
-        asyncio.run(self.bot.start(self.token))
+        self.bot.login(token=self.token)
+        self.bot.start(self.token)
 
     def raise_exception(self):
 
@@ -357,18 +361,66 @@ class DiscordIntegration(Thread):
         print('Starting discord bot...', end='\t\t\t\t')
         try:
             self.__db__ = db.DBConnection()
-            self.start()
-            print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
+            # self.start()
+            self.bot.run(self.token)
         except:
             print(ConsoleColors.FAIL + 'FAILED' + ConsoleColors.ENDC)
 
 
+class ConsoleThread(Thread):
+
+    def run(self) -> None:
+
+        if '--cli' in sys.argv:
+            while True:
+                cmd_raw = input()
+
+                buffer = cmd_raw.split(' ')
+                label = buffer[0]
+                args = buffer[1:]
+
+                if label == 'status':
+                    print('Telegram: \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
+                                                        if telegram_interface.is_alive()
+                                                        else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
+                    print('Discord:  \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
+                                                        if discord_interface.bot.is_ready()
+                                                        else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
+                elif label == 'stop':
+                    print('Stopping server...')
+                    clear_temp_dir()
+                    stop()
+                    key_checker.stop()
+                    sys.exit(0)
+                elif label == 'keymap':
+                    print('KEY   | Telegram ID | Time')
+                    print('==========================')
+                    for key in key_map:
+                        print(key + ' | ' + str(key_map[key]) + '  | ' + str(key_time_map[key]))
+                    print('==========================')
+                elif label == 'connections':
+                    print('Shape: [Telegram ID <===> Discord ID]')
+                    for connection in __db__.get_all_connections():
+                        print(f'[{connection[0]}] {connection[2]} <===> {connection[1]}')
+                elif label == 'remove':
+                    try:
+                        _id = int(args[0])
+                        __db__.delete_connection_by_id(_id)
+                        print('REMOVED')
+                    except ValueError:
+                        print(ConsoleColors.FAIL + 'ID must be integer' + ConsoleColors.ENDC)
+                    except IndexError:
+                        print(ConsoleColors.FAIL + 'Usage: remove [id]' + ConsoleColors.ENDC)
+
+
 telegram_interface: TelegramIntegration
 discord_interface: DiscordIntegration
+console_thread: ConsoleThread
 
 
 def launch():
     telegram_interface.launch()
+    console_thread.start()
     discord_interface.launch()
 
 
@@ -398,47 +450,7 @@ if __name__ == '__main__':
     print('Initializing other components...', end='\t')
     key_checker = KeyChecker()
     key_checker.start()
+    console_thread = ConsoleThread()
     print(ConsoleColors.OKGREEN + 'DONE' + ConsoleColors.ENDC)
 
     launch()
-
-    if '--cli' in sys.argv:
-        while True:
-            cmd_raw = input()
-
-            buffer = cmd_raw.split(' ')
-            label = buffer[0]
-            args = buffer[1:]
-
-            if label == 'status':
-                print('Telegram: \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
-                                                    if telegram_interface.is_alive()
-                                                    else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
-                print('Discord:  \t\t\t\t\t\t\t' + (ConsoleColors.OKGREEN + 'Active' + ConsoleColors.ENDC
-                                                    if discord_interface.is_alive()
-                                                    else ConsoleColors.FAIL + 'Inactive' + ConsoleColors.ENDC))
-            elif label == 'stop':
-                print('Stopping server...')
-                clear_temp_dir()
-                stop()
-                key_checker.stop()
-                sys.exit(0)
-            elif label == 'keymap':
-                print('KEY   | Telegram ID | Time')
-                print('==========================')
-                for key in key_map:
-                    print(key + ' | ' + str(key_map[key]) + '  | ' + str(key_time_map[key]))
-                print('==========================')
-            elif label == 'connections':
-                print('Shape: [Telegram ID <===> Discord ID]')
-                for connection in __db__.get_all_connections():
-                    print(f'[{connection[0]}] {connection[2]} <===> {connection[1]}')
-            elif label == 'remove':
-                try:
-                    _id = int(args[0])
-                    __db__.delete_connection_by_id(_id)
-                    print('REMOVED')
-                except ValueError:
-                    print(ConsoleColors.FAIL + 'ID must be integer' + ConsoleColors.ENDC)
-                except IndexError:
-                    print(ConsoleColors.FAIL + 'Usage: remove [id]' + ConsoleColors.ENDC)
